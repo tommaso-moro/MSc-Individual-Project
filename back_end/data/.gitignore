@@ -1,0 +1,5 @@
+.DS_Store
+things.txt
+__pycache__
+.env
+geo_data_fetcher.python
