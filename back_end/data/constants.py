@@ -20,12 +20,7 @@ GEO_DATA_BY_COORDINATES_SLEEP_TIME = 60.01
 HASHTAG_SYMBOL = '#'
 MENTION_SYMBOL = '@'
 TWEETS_STRINGS_TO_IGNORE = ['RT', 'via', "https", "http", "https", "…", '’', "co", "..."]
-
-
-class BatchesTimespan(Enum):
-    DAILY = 1
-    MONTHLY = 2 
-
+ 
 
 TAGS_STOPWORDS = {
     "Regenerative Agriculture": ["Regenerative", "Agriculture", "regenerative", "agriculture", "REGENERATIVE", "AGRICULTURE"],
@@ -34,7 +29,10 @@ TAGS_STOPWORDS = {
     "Deforestation": ["deforestation", "Deforestation", "DEFORESTATION"],
     "Afforestation": ["afforestation", "Afforestation", "AFFORESTATION"],
     "Supply Chain Sustainability": ["supply", "Supply", "SUPPLY", "chain", "Chain", "CHAIN", "sustainability", "Sustainability", "SUSTAINABILITY"],
-    "Sustainable Finance": ["sustainable", "Sustainable", "SUSTAINABLE", "finance", "Finance", "FINANCE"],
-    "Green Bonds": ["green", "Green", "GREEN", "bonds", "Bonds", "BONDS"],
-    #finish list
+    "Sustainable Finance": ["sustainable", "Sustainable", "SUSTAINABLE", "finance", "Finance", "FINANCE"]
 }
+
+
+class BatchesTimespan(Enum):
+    DAILY = 1
+    MONTHLY = 2 

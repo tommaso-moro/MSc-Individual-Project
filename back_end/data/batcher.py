@@ -2,6 +2,7 @@ import json
 import tweets_text_processor
 from constants import BatchesTimespan
 
+#BatcheCacher class is meant to be used as a template class for DailyBatchesCacher and MonthlyBatchesCacher
 class BatchesCacher:
     def __init__(self, batches_mongo_collection, tweets_data_mongo_collection, batches_timespan):
         self.batches_mongo_collection = batches_mongo_collection
@@ -61,6 +62,24 @@ class BatchesCacher:
             tweets_text = tweets_text + " " + doc["text"]
         return tweets_text
 
+    def get_tweets_text_by_tag_from_tweets_collection(self, tag):
+        cursor = self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag}, no_cursor_timeout = True)
+        tweets_text = ""
+        for doc in list(cursor):
+            tweets_text = tweets_text + " " + doc["text"]
+        return tweets_text
+
+    def get_most_mentioned_accounts_by_tag_and_date(self, tag, date):
+        text_processor = tweets_text_processor.TweetsTextProcessor()
+        tweets_text = self.get_tweets_text_by_date_and_tag_from_tweets_collection(date, tag)
+        most_mentioned_accounts_dict = text_processor.get_most_mentioned_accounts(tweets_text)
+        return most_mentioned_accounts_dict
+
+    def get_entities_frequencies_by_tag_and_date_from_tweets_collection(self, date, tag):
+        cursor = self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag, "created_at": {'$regex': date}}, no_cursor_timeout = True)
+        text_processor = tweets_text_processor.TweetsTextProcessor()
+        tag_entities_frequencies_doc = text_processor.extract_entities_frequencies_from_tweets(tweets=cursor)
+        return tag_entities_frequencies_doc
 
 
     '''
@@ -162,17 +181,30 @@ class BatchesCacher:
         tag_text_analytics_field = "tags." + tag + ".tweets_text_data"
         text_data_doc = self.get_tweets_text_analytics_by_date_and_tag(date, tag)
         self.batches_mongo_collection.update_one({"date": date}, {"$set": {tag_text_analytics_field: text_data_doc}})
+        
+        #self.batches_mongo_collection.update_one({"date": date}, { '$unset': { query_str: 1 } } )
+
+    def insert_most_mentioned_accounts_by_tag_to_batches_collection(self, tag, date):
+        most_mentioned_accounts_doc = self.get_most_mentioned_accounts_by_tag_and_date(tag, date)
+        tag_most_mentioned_accounts_field = "tags." + tag + ".most_mentioned_accounts"
+        self.batches_mongo_collection.update_one({"date": date}, {"$set": {tag_most_mentioned_accounts_field: most_mentioned_accounts_doc}}, upsert=True)
+
+
+    def insert_entities_frequencies_by_tag_and_date_to_batches_collection(self, date, tag):
+        tag_entities_frequencies_field = "tags." + tag + "entities_and_their_frequency"
+        tag_frequencies_doc = self.get_entities_frequencies_by_tag_and_date_from_tweets_collection(date, tag)
+        self.batches_mongo_collection.update_one({"date": date}, {"$set": {tag_entities_frequencies_field: tag_frequencies_doc}}, upsert=True)
 
 
 
     '''
         HELPER METHODS
     '''
-    def populate_json_file_with_collection_dates(self, json_filepath="dates.json"):
+    def populate_json_file_with_collection_dates(self, json_filepath):
         dates_json = {"dates" : self.get_tweets_dates_from_tweets_collection()}
         json.dump(dates_json, open(json_filepath, 'w'))
 
-    def populate_json_file_with_collection_tags(self, json_filepath="tags.json"):
+    def populateJsonFileWithCollectionTags(self, json_filepath):
         tagsJson = {"tags": self.get_tweets_tags_from_tweets_collection()}
         json.dump(tagsJson, open(json_filepath, 'w'))
     
@@ -186,6 +218,7 @@ class BatchesCacher:
     def generate_batches_collection(self):
         dates = self.get_tweets_dates_from_tweets_collection()
         tags = self.get_tweets_tags_from_tweets_collection()
+    
         self.insert_tweets_dates_to_batches_collection()
         self.insert_tweets_tags_to_batches_collection()
 
@@ -200,6 +233,9 @@ class BatchesCacher:
                 self.insert_perc_verified_users_by_date_and_tag_to_batches_collection(date, tag)
                 self.insert_geo_data_by_date_and_tag_to_batches_collection(date, tag)
                 self.insert_text_analytics_by_date_and_tag_to_batches_collection(date, tag)
+                if (self.batches_timespan == BatchesTimespan.MONTHLY):
+                    self.insert_most_mentioned_accounts_by_tag_to_batches_collection(tag, date)
+                    self.insert_entities_frequencies_by_tag_and_date_to_batches_collection(date, tag)
         
         
         
