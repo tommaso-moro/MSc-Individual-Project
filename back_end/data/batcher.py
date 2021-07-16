@@ -1,8 +1,8 @@
 import json 
 import tweets_text_processor
 from constants import BatchesTimespan
+from helper import get_average
 
-#BatcheCacher class is meant to be used as a template class for DailyBatchesCacher and MonthlyBatchesCacher
 class BatchesCacher:
     def __init__(self, batches_mongo_collection, tweets_data_mongo_collection, batches_timespan):
         self.batches_mongo_collection = batches_mongo_collection
@@ -32,10 +32,10 @@ class BatchesCacher:
         return tags
 
     def get_num_tweets_by_date_from_tweets_collection(self, date):
-        return self.tweets_data_mongo_collection.find({"created_at": {'$regex': date}}, no_cursor_timeout=True).count()
+        return self.tweets_data_mongo_collection.count_documents({"created_at": {'$regex': date}})
 
     def get_num_tweets_by_date_and_tag_from_tweets_collection(self, date, tag):
-        return self.tweets_data_mongo_collection.find({"created_at": {'$regex': date}, "query_meta_data.tag": tag}).count()
+        return self.tweets_data_mongo_collection.count_documents({"created_at": {'$regex': date}, "query_meta_data.tag": tag})
 
     def get_num_tweets_with_geo_data_by_date_from_tweets_collection(self, date):
         return self.tweets_data_mongo_collection.count_documents({"geo": { "$exists": 1 }, "created_at": {'$regex': date}})
@@ -80,6 +80,67 @@ class BatchesCacher:
         text_processor = tweets_text_processor.TweetsTextProcessor()
         tag_entities_frequencies_doc = text_processor.extract_entities_frequencies_from_tweets(tweets=cursor)
         return tag_entities_frequencies_doc
+
+    def get_n_most_liked_tweets_by_tag_and_date_from_tweets_collection(self, date, tag, num_tweets=10):
+        cursor = self.tweets_data_mongo_collection.aggregate(
+            [
+                { "$match": {"query_meta_data.tag": tag, "created_at": {"$regex": date}}},
+                { "$sort" : { "public_metrics.like_count" : -1} },
+                { "$limit": num_tweets}   
+            ]
+        )
+        return list(cursor)
+
+    def get_n_most_liked_tweets_by_tag_from_tweets_collection(self, tag, num_tweets=10):
+        cursor = self.tweets_data_mongo_collection.aggregate(
+            [
+                { "$match": {"query_meta_data.tag": tag }},
+                { "$sort" : { "public_metrics.like_count" : -1} },
+                { "$limit": num_tweets}   
+            ]
+        )
+        return list(cursor)
+
+    def get_n_most_retweeted_tweets_by_tag_and_date_from_tweets_collection(self, date, tag, num_tweets=10):
+        cursor = self.tweets_data_mongo_collection.aggregate(
+            [
+                { "$match": {"query_meta_data.tag": tag, "created_at": {"$regex": date}}},
+                { "$sort" : { "public_metrics.retweet_count" : -1} },
+                { "$limit": num_tweets}   
+            ]
+        )
+        return list(cursor)
+
+    def get_n_most_retweeted_tweets_by_tag_from_tweets_collection(self, tag, num_tweets=10):
+        cursor = self.tweets_data_mongo_collection.aggregate(
+            [
+                { "$match": {"query_meta_data.tag": tag }},
+                { "$sort" : { "public_metrics.retweet_count" : -1} },
+                { "$limit": num_tweets}   
+            ]
+        )
+        return list(cursor)
+
+
+    def get_subjectivity_scores_data_by_tag_and_date_from_tweets_collection(self, date, tag):
+        text_processor = tweets_text_processor.TweetsTextProcessor()
+        cursor = list(self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag, "created_at": {'$regex': date}}, {"text": 1, "_id": 0}, no_cursor_timeout = True))
+        subjectivity_scores = []
+        for doc in cursor:
+            tweet_text = doc["text"]
+            tweet_text = text_processor.clean_text(tweet_text)
+            if (text_processor.text_is_in_english(tweet_text)):
+                tweet_subjectivity_score = text_processor.get_text_subjectivity_score(tweet_text)
+                subjectivity_scores.append(tweet_subjectivity_score)
+        avg_subjectivity_score = get_average(subjectivity_scores) if (len(subjectivity_scores) != 0) else "n/a"
+        mongo_doc = {
+            "subjectivity_scores" : subjectivity_scores,
+            "avg_subjectivity_score" : avg_subjectivity_score
+        }
+        return mongo_doc
+        
+
+
 
 
     '''
@@ -184,17 +245,21 @@ class BatchesCacher:
         
         #self.batches_mongo_collection.update_one({"date": date}, { '$unset': { query_str: 1 } } )
 
-    def insert_most_mentioned_accounts_by_tag_to_batches_collection(self, tag, date):
+    def insert_most_mentioned_accounts_by_date_and_tag_to_batches_collection(self, date, tag):
         most_mentioned_accounts_doc = self.get_most_mentioned_accounts_by_tag_and_date(tag, date)
         tag_most_mentioned_accounts_field = "tags." + tag + ".most_mentioned_accounts"
         self.batches_mongo_collection.update_one({"date": date}, {"$set": {tag_most_mentioned_accounts_field: most_mentioned_accounts_doc}}, upsert=True)
 
 
     def insert_entities_frequencies_by_tag_and_date_to_batches_collection(self, date, tag):
-        tag_entities_frequencies_field = "tags." + tag + "entities_and_their_frequency"
+        tag_entities_frequencies_field = "tags." + tag + ".entities_and_their_frequency"
         tag_frequencies_doc = self.get_entities_frequencies_by_tag_and_date_from_tweets_collection(date, tag)
         self.batches_mongo_collection.update_one({"date": date}, {"$set": {tag_entities_frequencies_field: tag_frequencies_doc}}, upsert=True)
 
+    def insert_subjectivity_scores_data_by_tag_and_date_to_batches_collection(self, date, tag):
+        tag_subjectivity_analysis_field = "tags." + tag + ".subjectivity_analysis"
+        tag_subjectivity_analysis_doc = self.get_subjectivity_scores_data_by_tag_and_date_from_tweets_collection(date, tag)
+        self.batches_mongo_collection.update_one({"date": date}, {"$set": {tag_subjectivity_analysis_field: tag_subjectivity_analysis_doc}}, upsert=True)
 
 
     '''
@@ -204,7 +269,7 @@ class BatchesCacher:
         dates_json = {"dates" : self.get_tweets_dates_from_tweets_collection()}
         json.dump(dates_json, open(json_filepath, 'w'))
 
-    def populateJsonFileWithCollectionTags(self, json_filepath):
+    def populate_json_file_with_collection_tags(self, json_filepath):
         tagsJson = {"tags": self.get_tweets_tags_from_tweets_collection()}
         json.dump(tagsJson, open(json_filepath, 'w'))
     
@@ -234,8 +299,9 @@ class BatchesCacher:
                 self.insert_geo_data_by_date_and_tag_to_batches_collection(date, tag)
                 self.insert_text_analytics_by_date_and_tag_to_batches_collection(date, tag)
                 if (self.batches_timespan == BatchesTimespan.MONTHLY):
-                    self.insert_most_mentioned_accounts_by_tag_to_batches_collection(tag, date)
+                    self.insert_most_mentioned_accounts_by_date_and_tag_to_batches_collection(date, tag)
                     self.insert_entities_frequencies_by_tag_and_date_to_batches_collection(date, tag)
+                    self.insert_subjectivity_scores_data_by_tag_and_date_to_batches_collection(date, tag)
         
         
         
