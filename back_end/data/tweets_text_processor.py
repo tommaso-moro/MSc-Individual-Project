@@ -92,7 +92,7 @@ class TweetsTextProcessor:
     '''
     def get_mentions(self, text):
         tokenized_text = self.tokenize_text(text)
-        mentions = [term for term in tokenized_text if term.startswith(MENTION_SYMBOL)]
+        mentions = [term for term in tokenized_text if ((term.startswith(MENTION_SYMBOL)) and (term != MENTION_SYMBOL))]
         return mentions
 
 
