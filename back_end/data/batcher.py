@@ -4,9 +4,10 @@ from constants import BatchesTimespan
 from helper import get_average
 
 class BatchesCacher:
-    def __init__(self, batches_mongo_collection, tweets_data_mongo_collection, batches_timespan):
+    def __init__(self, batches_mongo_collection, tweets_data_mongo_collection, hashtags_cooccurrences_mongo_collection, batches_timespan):
         self.batches_mongo_collection = batches_mongo_collection
         self.tweets_data_mongo_collection = tweets_data_mongo_collection
+        self.hashtags_cooccurrences_mongo_collection = hashtags_cooccurrences_mongo_collection
         self.batches_timespan = batches_timespan
 
 
@@ -138,7 +139,14 @@ class BatchesCacher:
             "avg_subjectivity_score" : avg_subjectivity_score
         }
         return mongo_doc
-        
+
+
+    def get_hashtags_cooccurrences_dict_by_tag_and_date_from_tweets_collection(self, date, tag):
+        cursor = self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag, "created_at": {'$regex': date}}, {"text": 1, "_id": 0}, no_cursor_timeout = True)
+        text_processor = tweets_text_processor.TweetsTextProcessor()
+        hashtags_cooccurrences_dict = text_processor.construct_hashtags_cooccurrences_dict(cursor)
+        return hashtags_cooccurrences_dict
+
 
 
 
@@ -263,6 +271,67 @@ class BatchesCacher:
 
 
     '''
+    Get n most retweeted tweets by tag and date and construct a dict that looks like:
+    {
+        "1" : tweet,
+        "2" : tweet,
+        ...
+        "n" : tweet,
+    }
+    Then insert the dict in the appropriate doc in the batches collection.
+    
+    PS. Given Mongo's 16MB / document limit, if num_tweets is too high it might exceed that limit.
+    '''
+    def insert_n_most_retweeted_tweets_by_tag_and_date_to_batches_collection(self, date, tag, num_tweets=10):
+        most_retweeted_tweets = self.get_n_most_retweeted_tweets_by_tag_and_date_from_tweets_collection(date, tag)
+        most_retweeted_tweets_field = "tags." + tag + ".most_retweeted_tweets"
+        doc = {}
+        for index, tweet in enumerate(most_retweeted_tweets):
+            doc[str(index+1)] = tweet
+        self.batches_mongo_collection.update_one({"date": date}, {"$set": {most_retweeted_tweets_field: doc}}, upsert=True)
+
+
+    '''
+    Get n most liked tweets by tag and date and construct a dict that looks like:
+    {
+        "1" : tweet,
+        "2" : tweet,
+        ...
+        "n" : tweet,
+    }
+    Then insert the dict in the appropriate doc in the batches collection.
+
+    PS. Given Mongo's 16MB / document limit, if num_tweets is too high it might exceed that limit.
+    '''            
+    def insert_n_most_liked_tweets_by_tag_and_date_to_batches_collection(self, date, tag, num_tweets=10):
+        most_retweeted_tweets = self.get_n_most_liked_tweets_by_tag_and_date_from_tweets_collection(date, tag)
+        most_liked_tweets_field = "tags." + tag + ".most_liked_tweets"
+        doc = {}
+        for index, tweet in enumerate(most_retweeted_tweets):
+            doc[str(index+1)] = tweet
+        self.batches_mongo_collection.update_one({"date": date}, {"$set": {most_liked_tweets_field: doc}}, upsert=True)
+
+
+    def insert_hashtags_cooccurrences_dict_by_tag_and_date(self, date, tag):
+        #dict containing many dicts, one for each hashtag
+        hashtags_cooccurrences_dict = self.get_hashtags_cooccurrences_dict_by_tag_and_date_from_tweets_collection(date, tag)
+
+        #list containing many dicts, one for each hashtag
+        hashtags_cooccurrences_dicts = []
+        for hashtag in hashtags_cooccurrences_dict:
+            #dict for individual hashtag
+            hashtag_cooccurrences_dict = {
+                "tag": tag,
+                "date": date,
+                "hashtag": hashtag,
+                "cooccurrences": hashtags_cooccurrences_dict[hashtag]
+            }
+            hashtags_cooccurrences_dicts.append(hashtag_cooccurrences_dict)
+        if (len(hashtags_cooccurrences_dicts) > 0):
+            self.hashtags_cooccurrences_mongo_collection.insert_many(hashtags_cooccurrences_dicts)
+            print("Cached hashtags cooccurrences data for tag '" + tag + "' and date " + date, flush=True)
+
+    '''
         HELPER METHODS
     '''
     def populate_json_file_with_collection_dates(self, json_filepath):
@@ -284,8 +353,8 @@ class BatchesCacher:
         dates = self.get_tweets_dates_from_tweets_collection()
         tags = self.get_tweets_tags_from_tweets_collection()
     
-        self.insert_tweets_dates_to_batches_collection()
-        self.insert_tweets_tags_to_batches_collection()
+        #self.insert_tweets_dates_to_batches_collection()
+        #self.insert_tweets_tags_to_batches_collection()
 
         for date in dates:
             self.insert_tot_num_tweets_by_date_to_batches_collection(date)
@@ -302,6 +371,9 @@ class BatchesCacher:
                     self.insert_most_mentioned_accounts_by_date_and_tag_to_batches_collection(date, tag)
                     self.insert_entities_frequencies_by_tag_and_date_to_batches_collection(date, tag)
                     self.insert_subjectivity_scores_data_by_tag_and_date_to_batches_collection(date, tag)
+                    self.insert_hashtags_cooccurrences_dict_by_tag_and_date(date, tag)
+                    self.insert_n_most_liked_tweets_by_tag_and_date_to_batches_collection(date, tag)
+                    self.insert_n_most_retweeted_tweets_by_tag_and_date_to_batches_collection(date, tag)
         
         
         

@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 from enum import Enum
 import os
-load_dotenv('.env')
+load_dotenv('back_end/data/.env')
 
 
 BEARER_TOKEN = os.getenv('BEARER_TOKEN')
@@ -15,7 +15,7 @@ PROD_MONGO_BATCHES_COL_NAME = "batches_prod"
 TWEETS_SEARCH_API_ENDPOINT = "https://api.twitter.com/2/tweets/search/all?query="
 TWEET_GEO_DATA_API_ENDPOINT = "https://api.twitter.com/1.1/geo/id/"
 TWEETS_SEARCH_SLEEP_TIME = 3.01
-GEO_DATA_BY_PLACE_ID_SLEEP_TIME = 12.01
+GEO_DATA_BY_PLACE_ID_SLEEP_TIME = 13
 GEO_DATA_BY_COORDINATES_SLEEP_TIME = 60.01
 HASHTAG_SYMBOL = '#'
 MENTION_SYMBOL = '@'

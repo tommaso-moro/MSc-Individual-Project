@@ -14,7 +14,8 @@ import spacy
 nlp = spacy.load("en_core_web_sm")
 
 from nltk.tokenize import TweetTokenizer
-from nltk import pos_tag, wordnet
+from nltk import pos_tag, wordnet, bigrams
+from nltk.util import ngrams
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
 
@@ -74,7 +75,7 @@ class TweetsTextProcessor:
     '''
     def get_hashtags(self, text):
         tokenized_text = self.tokenize_text(text)
-        hashtags = [term for term in tokenized_text if term.startswith(HASHTAG_SYMBOL)]
+        hashtags = [term for term in tokenized_text if ((term.startswith(HASHTAG_SYMBOL)) and (term != HASHTAG_SYMBOL))]
         return hashtags
 
 
@@ -205,12 +206,17 @@ class TweetsTextProcessor:
         "#circulareconomy": 8,
         "#solarpanels": 5
     }
+
+    Returns frequencies fo all hashtags if -1 is passed as input for num_most_common
     '''
     def get_most_common_hashtags_from_text(self, text, num_most_common=20):
         tokenized_text = self.tokenize_text(text) #.lower() is not called on the text because case sensitivity needs to be preserved for hashtag analysis
         hashtags = [term for term in tokenized_text if term.startswith(HASHTAG_SYMBOL)] 
         self.hashtags_counter.update(hashtags)
-        most_common_hashtags_tuples = self.hashtags_counter.most_common(num_most_common)
+        if (num_most_common == -1):
+            most_common_hashtags_tuples = self.hashtags_counter.most_common()
+        else:
+            most_common_hashtags_tuples = self.hashtags_counter.most_common(num_most_common)
         return get_dict_from_tuples_list(most_common_hashtags_tuples)
 
 
@@ -328,6 +334,28 @@ class TweetsTextProcessor:
         except:
             return False #if there are errors trying to detect the language (e.g. the text is only a few characters long) return False
 
+
+    def construct_hashtags_cooccurrences_dict(self, tweets):
+        all_hashtags = []
+        dict = {}
+        for tweet in tweets:
+            tweet_text = tweet["text"]
+            hashtags = self.get_hashtags(tweet_text)
+            for hashtag in hashtags:
+                if hashtag not in all_hashtags:
+                    all_hashtags.append(hashtag)
+            for ht_one in hashtags: #for each hashtag
+                for ht_two in hashtags: #loop through the other hashtags in the same tweet and add 1 to the ht_one-ht_two relationship in the dict
+                    if (ht_two != ht_one):
+                        if (ht_one in dict):
+                            if ht_two in dict[ht_one]:
+                                dict[ht_one][ht_two] += 1
+                            else:
+                                dict[ht_one][ht_two] = 1 
+                        else:
+                            dict[ht_one] = {}
+                            dict[ht_one][ht_two] = 1
+        return dict
 
 
     

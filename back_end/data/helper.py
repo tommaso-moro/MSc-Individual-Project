@@ -1,4 +1,5 @@
 import pandas as pd
+import json
 
 
 '''
@@ -32,4 +33,8 @@ def get_average(numbers_list, digits=2):
     for number in numbers_list:
         sum += number
     return round(sum/len(numbers_list), digits)
+
+def write_dict_to_json_file(json_filepath, dict):
+    json.dump(dict, open(json_filepath, 'w'), indent=4)
+
 

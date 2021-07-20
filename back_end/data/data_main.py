@@ -4,11 +4,22 @@ import helper
 
 def main():
     client_mongo = mongo_client.MongoClient(MONGO_DB_USERNAME, MONGO_DB_PASSWORD, MONGO_DB_NAME, MONGO_DB_ADDRESS)
-    dev_data_mongo_col = client_mongo.getMongoCollection("data_test")
-    monthly_batches_col = client_mongo.getMongoCollection("monthly_batches_dev")
+    prod_col = client_mongo.getMongoCollection(PROD_MONGO_COL_NAME)
+    prod_col_new = client_mongo.getMongoCollection("data_prod")
+    batches_mongo_col = client_mongo.getMongoCollection("monthly_batches_dev")
+    sample_prod_col = client_mongo.getMongoCollection("prod_sample")
+    hashtags_cooccurrences_col = client_mongo.getMongoCollection("hashtags_cooccurrences")
+    geo_data_caching_col = client_mongo.getMongoCollection("geo_data_caching")
+    
+    #batching_handler = batcher.BatchesCacher(batches_mongo_col, sample_prod_col, hashtags_cooccurrences_col, BatchesTimespan.MONTHLY)
+    #batching_handler.generate_batches_collection()
+    #geoDataCacher = geo_data_cacher.GeoDataCacher(BEARER_TOKEN, geo_data_caching_col)
+    #geoDataCacher.attach_cached_geo_data_to_tweets(sample_prod_col)
 
-    batching = batcher.BatchesCacher(monthly_batches_col, dev_data_mongo_col, BatchesTimespan.MONTHLY)
-    batching.generate_batches_collection()
+    
+
+    
+   
 
     
     
@@ -19,6 +30,18 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+    
+
+    
+
+#get most influential users per topic
+#get common hashtags across different topics (i.e. tags)
+#make chord where each label is a tag and the thickness of the strings connecting them is based on how many hashtags (or keywords?) they have in common
+
+    
+
 
 
     
