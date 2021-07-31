@@ -34,8 +34,6 @@ class TweetsTextProcessor:
     def __init__(self):
         self.tokenizer = TweetTokenizer()
         self.strings_to_ignore = list(string.punctuation) + stopwords.words('english') + list(wordcloud.STOPWORDS) + TWEETS_STRINGS_TO_IGNORE
-        self.hashtags_counter = Counter()
-        self.terms_counter = Counter()
 
 
 
@@ -210,13 +208,14 @@ class TweetsTextProcessor:
     Returns frequencies fo all hashtags if -1 is passed as input for num_most_common
     '''
     def get_most_common_hashtags_from_text(self, text, num_most_common=20):
+        hashtags_counter = Counter()
         tokenized_text = self.tokenize_text(text) #.lower() is not called on the text because case sensitivity needs to be preserved for hashtag analysis
         hashtags = [term for term in tokenized_text if term.startswith(HASHTAG_SYMBOL)] 
-        self.hashtags_counter.update(hashtags)
+        hashtags_counter.update(hashtags)
         if (num_most_common == -1):
-            most_common_hashtags_tuples = self.hashtags_counter.most_common()
+            most_common_hashtags_tuples = hashtags_counter.most_common()
         else:
-            most_common_hashtags_tuples = self.hashtags_counter.most_common(num_most_common)
+            most_common_hashtags_tuples = hashtags_counter.most_common(num_most_common)
         return get_dict_from_tuples_list(most_common_hashtags_tuples)
 
 
@@ -233,9 +232,10 @@ class TweetsTextProcessor:
     '''
     def get_most_common_terms_from_text(self, text, num_most_common=50):
         preprocessed_text = self.preprocess_text(text)
+        terms_counter = Counter()
         terms = [term for term in preprocessed_text if term not in self.strings_to_ignore and not (term.startswith((HASHTAG_SYMBOL, MENTION_SYMBOL)) or (len(term)<3))]  #no mentions, no hashtags
-        self.terms_counter.update(terms)
-        most_common_terms_tuples = self.terms_counter.most_common(num_most_common)
+        terms_counter.update(terms)
+        most_common_terms_tuples = terms_counter.most_common(num_most_common)
         return get_dict_from_tuples_list(most_common_terms_tuples)
 
 

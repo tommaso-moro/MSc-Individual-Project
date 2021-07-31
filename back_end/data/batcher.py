@@ -2,6 +2,12 @@ import json
 import tweets_text_processor
 from constants import BatchesTimespan
 from helper import get_average
+from datetime import datetime
+import helper
+from sys import getsizeof
+
+
+
 
 class BatchesCacher:
     def __init__(self, batches_mongo_collection, tweets_data_mongo_collection, hashtags_cooccurrences_mongo_collection, batches_timespan):
@@ -9,6 +15,7 @@ class BatchesCacher:
         self.tweets_data_mongo_collection = tweets_data_mongo_collection
         self.hashtags_cooccurrences_mongo_collection = hashtags_cooccurrences_mongo_collection
         self.batches_timespan = batches_timespan
+        self.text_processor = tweets_text_processor.TweetsTextProcessor()
 
 
     '''
@@ -34,6 +41,7 @@ class BatchesCacher:
 
     def get_num_tweets_by_date_from_tweets_collection(self, date):
         return self.tweets_data_mongo_collection.count_documents({"created_at": {'$regex': date}})
+        # return self.tweets_data_mongo_collection.aggregate([{"$match": {"created_at": {"$regex": date}}},{"$count": "num_documents"}])
 
     def get_num_tweets_by_date_and_tag_from_tweets_collection(self, date, tag):
         return self.tweets_data_mongo_collection.count_documents({"created_at": {'$regex': date}, "query_meta_data.tag": tag})
@@ -57,29 +65,27 @@ class BatchesCacher:
         return len(self.tweets_data_mongo_collection.distinct('author_data.id', {"author_data.verified": True, "created_at" : {'$regex': date}, "query_meta_data.tag": tag}))
 
     def get_tweets_text_by_date_and_tag_from_tweets_collection(self, date, tag):
-        cursor = self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag, "created_at": {'$regex': date}}, no_cursor_timeout = True)
+        cursor = self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag, "created_at": {'$regex': date}}, {"_id": 0, "text": 1}, no_cursor_timeout = True)
         tweets_text = ""
-        for doc in list(cursor):
+        for doc in cursor:
             tweets_text = tweets_text + " " + doc["text"]
         return tweets_text
 
     def get_tweets_text_by_tag_from_tweets_collection(self, tag):
-        cursor = self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag}, no_cursor_timeout = True)
+        cursor = self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag}, {"_id": 0, "text": 1}, no_cursor_timeout = True)
         tweets_text = ""
-        for doc in list(cursor):
+        for doc in cursor:
             tweets_text = tweets_text + " " + doc["text"]
         return tweets_text
 
     def get_most_mentioned_accounts_by_tag_and_date(self, tag, date):
-        text_processor = tweets_text_processor.TweetsTextProcessor()
         tweets_text = self.get_tweets_text_by_date_and_tag_from_tweets_collection(date, tag)
-        most_mentioned_accounts_dict = text_processor.get_most_mentioned_accounts(tweets_text)
+        most_mentioned_accounts_dict = self.text_processor.get_most_mentioned_accounts(tweets_text)
         return most_mentioned_accounts_dict
 
     def get_entities_frequencies_by_tag_and_date_from_tweets_collection(self, date, tag):
         cursor = self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag, "created_at": {'$regex': date}}, no_cursor_timeout = True)
-        text_processor = tweets_text_processor.TweetsTextProcessor()
-        tag_entities_frequencies_doc = text_processor.extract_entities_frequencies_from_tweets(tweets=cursor)
+        tag_entities_frequencies_doc = self.text_processor.extract_entities_frequencies_from_tweets(tweets=cursor)
         return tag_entities_frequencies_doc
 
     def get_n_most_liked_tweets_by_tag_and_date_from_tweets_collection(self, date, tag, num_tweets=10):
@@ -124,14 +130,13 @@ class BatchesCacher:
 
 
     def get_subjectivity_scores_data_by_tag_and_date_from_tweets_collection(self, date, tag):
-        text_processor = tweets_text_processor.TweetsTextProcessor()
         cursor = list(self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag, "created_at": {'$regex': date}}, {"text": 1, "_id": 0}, no_cursor_timeout = True))
         subjectivity_scores = []
         for doc in cursor:
             tweet_text = doc["text"]
-            tweet_text = text_processor.clean_text(tweet_text)
-            if (text_processor.text_is_in_english(tweet_text)):
-                tweet_subjectivity_score = text_processor.get_text_subjectivity_score(tweet_text)
+            tweet_text = self.text_processor.clean_text(tweet_text)
+            if (self.text_processor.text_is_in_english(tweet_text)):
+                tweet_subjectivity_score = self.text_processor.get_text_subjectivity_score(tweet_text)
                 subjectivity_scores.append(tweet_subjectivity_score)
         avg_subjectivity_score = get_average(subjectivity_scores) if (len(subjectivity_scores) != 0) else "n/a"
         mongo_doc = {
@@ -143,8 +148,7 @@ class BatchesCacher:
 
     def get_hashtags_cooccurrences_dict_by_tag_and_date_from_tweets_collection(self, date, tag):
         cursor = self.tweets_data_mongo_collection.find({"query_meta_data.tag": tag, "created_at": {'$regex': date}}, {"text": 1, "_id": 0}, no_cursor_timeout = True)
-        text_processor = tweets_text_processor.TweetsTextProcessor()
-        hashtags_cooccurrences_dict = text_processor.construct_hashtags_cooccurrences_dict(cursor)
+        hashtags_cooccurrences_dict = self.text_processor.construct_hashtags_cooccurrences_dict(cursor)
         return hashtags_cooccurrences_dict
 
 
@@ -223,7 +227,7 @@ class BatchesCacher:
 
     def insert_geo_data_by_date_and_tag_to_batches_collection(self, date, tag):
         cursor = self.tweets_data_mongo_collection.find({"geo.geo_data": { "$exists": 1 }, "geo.geo_data.errors": {"$exists": 0}, "created_at": {'$regex': date}, "query_meta_data.tag": tag}, {"geo": 1})
-        for doc in list(cursor):
+        for doc in cursor:
             place_id = doc["geo"]["geo_data"]["id"]
             tag_geo_data_place_ids_field = "tags." + tag + ".geo_data.place_ids." + place_id
 
@@ -278,9 +282,7 @@ class BatchesCacher:
         ...
         "n" : tweet,
     }
-    Then insert the dict in the appropriate doc in the batches collection.
-    
-    PS. Given Mongo's 16MB / document limit, if num_tweets is too high it might exceed that limit.
+    Then insert the dict in the appropriate doc in the batches collection
     '''
     def insert_n_most_retweeted_tweets_by_tag_and_date_to_batches_collection(self, date, tag, num_tweets=10):
         most_retweeted_tweets = self.get_n_most_retweeted_tweets_by_tag_and_date_from_tweets_collection(date, tag)
@@ -299,9 +301,7 @@ class BatchesCacher:
         ...
         "n" : tweet,
     }
-    Then insert the dict in the appropriate doc in the batches collection.
-
-    PS. Given Mongo's 16MB / document limit, if num_tweets is too high it might exceed that limit.
+    Then insert the dict in the appropriate doc in the batches collection
     '''            
     def insert_n_most_liked_tweets_by_tag_and_date_to_batches_collection(self, date, tag, num_tweets=10):
         most_retweeted_tweets = self.get_n_most_liked_tweets_by_tag_and_date_from_tweets_collection(date, tag)
@@ -310,6 +310,7 @@ class BatchesCacher:
         for index, tweet in enumerate(most_retweeted_tweets):
             doc[str(index+1)] = tweet
         self.batches_mongo_collection.update_one({"date": date}, {"$set": {most_liked_tweets_field: doc}}, upsert=True)
+
 
 
     def insert_hashtags_cooccurrences_dict_by_tag_and_date(self, date, tag):
@@ -329,7 +330,6 @@ class BatchesCacher:
             hashtags_cooccurrences_dicts.append(hashtag_cooccurrences_dict)
         if (len(hashtags_cooccurrences_dicts) > 0):
             self.hashtags_cooccurrences_mongo_collection.insert_many(hashtags_cooccurrences_dicts)
-            print("Cached hashtags cooccurrences data for tag '" + tag + "' and date " + date, flush=True)
 
     '''
         HELPER METHODS
@@ -344,36 +344,74 @@ class BatchesCacher:
     
     def get_tweets_text_analytics_by_date_and_tag(self, date, tag):
         tweets_text = self.get_tweets_text_by_date_and_tag_from_tweets_collection(date, tag)
-        text_processor = tweets_text_processor.TweetsTextProcessor()
-        hashtags_frequencies = text_processor.get_most_common_hashtags_from_text(tweets_text)
-        terms_frequencies = text_processor.get_most_common_terms_from_text(tweets_text)
+        hashtags_frequencies = self.text_processor.get_most_common_hashtags_from_text(tweets_text)
+        terms_frequencies = self.text_processor.get_most_common_terms_from_text(tweets_text)
         return {"terms_frequencies": terms_frequencies, "hashtags_frequencies": hashtags_frequencies}
 
     def generate_batches_collection(self):
+        print("Fetching dates and tags.", flush=True)
         dates = self.get_tweets_dates_from_tweets_collection()
         tags = self.get_tweets_tags_from_tweets_collection()
+
+        
+        print("Tags: ", flush=True)
+        for tag in tags:
+            print("\t -  '" + tag + "'", flush=True)
+        print("\n", flush=True)
     
-        #self.insert_tweets_dates_to_batches_collection()
-        #self.insert_tweets_tags_to_batches_collection()
+        self.insert_tweets_dates_to_batches_collection()
+        print("Inserted dates.", flush=True)
+
+        self.insert_tweets_tags_to_batches_collection()
+        print("Inserted tags.", flush=True)
+        print("\n", flush=True)
 
         for date in dates:
+
+            current_datetime_as_str = helper.get_current_datetime_as_str()
+            print(current_datetime_as_str, flush=True)
+            print("Batching date: " + date, flush=True)
+
             self.insert_tot_num_tweets_by_date_to_batches_collection(date)
             self.insert_num_and_perc_tweets_with_geo_data_by_date_to_batches_collection(date)
             self.insert_num_users_by_date_to_batches_collection(date)
             self.insert_perc_verified_users_by_date_to_batches_collection(date)
             for tag in tags:
+                print("\tHandling tag: '" + tag + "'.", flush=True)
+
                 self.insert_tot_num_tweets_by_date_and_tag_to_batches_collection(date, tag)
+                print("\t\t- Inserted number of tweets.", flush=True)
+
                 self.insert_num_and_perc_tweets_with_geo_data_by_date_and_tag_to_batches_collection(date, tag)
+                print("\t\t- Inserted number and percentage of tweets with geo data.", flush=True)
+
                 self.insert_perc_verified_users_by_date_and_tag_to_batches_collection(date, tag)
+                print("\t\t- Inserted percentage of verified users.", flush=True)
+
                 self.insert_geo_data_by_date_and_tag_to_batches_collection(date, tag)
+                print("\t\t- Inserted geo data.", flush=True)
+
                 self.insert_text_analytics_by_date_and_tag_to_batches_collection(date, tag)
+                print("\t\t- Inserted text analytics.", flush=True)
+
                 if (self.batches_timespan == BatchesTimespan.MONTHLY):
                     self.insert_most_mentioned_accounts_by_date_and_tag_to_batches_collection(date, tag)
-                    self.insert_entities_frequencies_by_tag_and_date_to_batches_collection(date, tag)
+                    print("\t\t- Inserted most mentioned accounts.", flush=True)
+
+                    #self.insert_entities_frequencies_by_tag_and_date_to_batches_collection(date, tag)
+
                     self.insert_subjectivity_scores_data_by_tag_and_date_to_batches_collection(date, tag)
+                    print("\t\t- Inserted subjectivity scores.", flush=True)
+
                     self.insert_hashtags_cooccurrences_dict_by_tag_and_date(date, tag)
+                    print("\t\t- Inserted hashtag cooccurrences.", flush=True)
+
                     self.insert_n_most_liked_tweets_by_tag_and_date_to_batches_collection(date, tag)
+                    print("\t\t- Inserted most liked tweets.", flush=True)
+
                     self.insert_n_most_retweeted_tweets_by_tag_and_date_to_batches_collection(date, tag)
+                    print("\t\t- Inserted most retweeted tweets.", flush=True)
+            print("\n", flush=True)
         
         
         

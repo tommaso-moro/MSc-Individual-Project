@@ -100,7 +100,7 @@ class GeoDataCacher:
 
         #for each place_id, if it is cached then its cached geo_data and attach it to the tweet in the tweets collection
         for place_id in tweets_place_ids:
-            place_id_cached_geo_data = self.geo_data_caching_mongo_collection.find_one({"id": place_id})
+            place_id_cached_geo_data = self.geo_data_caching_mongo_collection.find_one({"id": place_id}, {"_id": 0})
             if (place_id_cached_geo_data != None):
                 tweets_data_mongo_collection.update_many({"geo.place_id": place_id}, {"$set": {"geo.geo_data": place_id_cached_geo_data}}, upsert=True)
             else:
@@ -108,6 +108,7 @@ class GeoDataCacher:
                 place_ids_whose_geo_data_was_never_cached.append(place_id)
 
         if (len(place_ids_whose_geo_data_was_never_cached) > 0):
+            print(str(len(place_ids_whose_geo_data_was_never_cached)) + " tweets were found whose geo data has never been cached.")
             print("All the tweets with the following place_ids were not updated with geo data because the geo data associated to those place ids was never cached: ")
             print(place_ids_whose_geo_data_was_never_cached)
         
