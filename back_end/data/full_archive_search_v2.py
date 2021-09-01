@@ -3,13 +3,8 @@ import json
 from re import T
 import requests
 from urllib.parse import quote
-import pymongo
-import bson
-from bson.json_util import loads
 import datetime
 import time
-from dotenv import load_dotenv
-import os
 
 
 '''
@@ -17,12 +12,12 @@ Class that handles full archive search using the academic level of access to the
 To handle requests see: https://developer.twitter.com/en/docs/twitter-api/tweets/search/api-reference/get-tweets-search-all
 For authentication see: https://developer.twitter.com/en/docs/authentication/oauth-2-0; 
 
-- Takes in the "AUTH_TOKEN"
-- Takes in an optional mongo collection
-- Takes in a query to search the Twitter archive
+- Takes in a BEARER TOKEN
+- Takes in a mongo collection
+- Contains the method setQuery() to set a query to perform a search using the Twitter API
 '''
 class TwitterSearch:
-    def __init__(self, bearer_token, mongoCollection=None):
+    def __init__(self, bearer_token, mongoCollection):
         self.tweets_search_url = constants.TWEETS_SEARCH_API_ENDPOINT  # API endpoint
         self.tweet_geo_data_url = constants.TWEET_GEO_DATA_API_ENDPOINT
         self.bearer_token = bearer_token  # bearer_token for authentication
@@ -32,9 +27,7 @@ class TwitterSearch:
         self.data = {"data":[]}  # dict to store the data
         self.tweets_search_sleep_time = 3.01 # minimum sleep time between requests to avoid hitting the Twitter API's rate limits
         self.geo_data_search_sleep_time = 12.01
-        if mongoCollection:
-            # mongo collection to store the data using the relevant methods
-            self.mongoCollection = mongoCollection
+        self.mongoCollection = mongoCollection
 
 
 
@@ -52,41 +45,10 @@ class TwitterSearch:
         return json.loads(r.text)
 
 
-
-
-    '''
-    Make a GET api call to the Twitter API to get geo_data related to the place_id that is given
-    '''
-    def getGeoData(self, place_id):
-        query = "https://api.twitter.com/1.1/geo/id/" + place_id + ".json"
-        geoData = self.request(query)
-        return geoData
-
-
-
-    ''' 
-    For each tweet's data, get its place_id (if it has one) and make a GET call to the Twitter API to get geo_data. 
-    Then, add the geo_data to the tweet's data 
-    '''
-    def addGeoDataToTweets(self, data):
-        tweetsData = data["data"]
-        for tweetData in tweetsData:
-            if ("geo" in tweetData):
-                try: 
-                    tweetPlaceId = tweetData["geo"]["place_id"]
-                    geoData = self.getGeoData(tweetPlaceId)
-                    tweetData["geo"]["geo_data"] = geoData
-                except:
-                    tweetId = tweetData["id"]
-                    print("Tweet with id " + tweetId + " has 'geo' field but there was an issue trying to get tweetData[\"geo\"][\"place_id\"]")
-
-
-
-
     ''' 
     By default, the API response attaches data related to the list of authors of the tweets that have been fetched
-    to the field "users" within the field "includes" in the API response. This method find the user data for each tweet
-    and attaches it to the tweet itself 
+    to the field "users" within the field "includes" in the API response. This method finds the user data for each tweet
+    and attaches it to the tweet itself. 
     '''
     def addUserDataToTweets(self, data):
         tweetsData = data["data"]
@@ -117,7 +79,9 @@ class TwitterSearch:
 
 
 
-    
+    '''
+    Add to the tweets data about the query that was used to fetch the tweets. 
+    '''
     def addQryMetaDataToTweets(self, data):
         tweetsData = data["data"]
         for tweetData in tweetsData:
@@ -138,17 +102,13 @@ class TwitterSearch:
         numTweets = 0
 
         while next == True:
-
             #get data
-            #print("before request: " + str(time.perf_counter()), flush=True)
             response = self.request(query)
-            #print("after request before adding user data: " + str(time.perf_counter()), flush=True)
-            #self.addGeoDataToTweets(response)
+            #add user data to the tweets data
             self.addUserDataToTweets(response)
-            #print("after adding user data before adding qrymetadata: " + str(time.perf_counter()), flush=True)
             if (self.queryMetaData != {}):
                 self.addQryMetaDataToTweets(response)
-            #print("after adding qry metadata: " + str(time.perf_counter()), flush=True)
+            #once the user data has been added, clean the tweets by removing the "includes" field as it's no longer needed
             response = self.getCleanData(response)
             try:
                 next_token = response['meta']['next_token']
@@ -157,11 +117,10 @@ class TwitterSearch:
                 next = False
 
             #save data
-            #print("before saving to mongo: " + str(time.perf_counter()), flush=True)
             self.saveTweetsToMongoCollection(tweetsData=response["data"])
-            #print("after saving to mongo: " + str(time.perf_counter()), flush=True)
             numTweets += len(response["data"])
             pageNumber += 1
+            #sleep to avoid hitting the Twitter API's rate limits
             time.sleep(self.tweets_search_sleep_time)
             print(f'Page number: {pageNumber}\n')
         print('Done! ' + str(numTweets) + " tweets were saved!")
@@ -171,12 +130,11 @@ class TwitterSearch:
 
     '''
 	Takes in:
-    - the "query" as a string (e.g. -> "(regenerative agriculture OR #regenerativeagriculture) -is:retweet lang:en )
-    - an optional dictionary containing other parameters (e.g. -> {"max_results": 500, "tweet_fields":"geo, lang, author_id"})
-    - an optional query tag (e.g. a high-level label of a the query, e.g. -> "regenerative agriculture")
-
+        - the "query" as a string. e.g. : "(regenerative agriculture OR #regenerativeagriculture) -is:retweet lang:en" 
+        - an optional dictionary containing other parameters. e.g. : {"max_results": 500, "tweet_fields":"geo, lang, author_id"}
+        - an optional query tag, i.e. a high-level label of a the query. e.g. : "Regenerative Agriculture"
     and performs HTTP encoding of the query and the parameters to constructs a url endpoint for making the api request
-    (e.g. https://api.twitter.com/2/tweets/search/all?query=biodiversity&tweet.fields=created_at&expansions=author_id&user.fields=created_at)
+    (e.g. of generated string : "https://api.twitter.com/2/tweets/search/all?query=biodiversity&tweet.fields=created_at&expansions=author_id&user.fields=created_at")
     
     Parameters that can be set include: [author_id,referenced_tweets.id,referenced_tweets.id.author_id,entities.mentions.username,attachments.poll_ids,attachments.media_keys,in_reply_to_user_id,geo.place_id]
     Both the query and the parameters dict are formatted as one string that can be used as endpoint to make the API call.
@@ -197,6 +155,8 @@ class TwitterSearch:
             qryAsUrl = qryAsUrl + paramsAsUrl
 
         self.query = qryAsUrl
+
+        #set the query tag, if specified
         if (queryTag != ""):
             self.queryTag = queryTag
         
@@ -208,11 +168,11 @@ class TwitterSearch:
 
 
     ''' 
-    Construct a dictionary containing info about the query and other parameters utilized to fetch the data. The
+    Construct a dictionary containing info about the query and other parameters utilized to fetch the data. (The
     fields that contain dots ('.') are handled by replacing the dots with underscores ('_') so that the object can
-    later be pushed to mongo.
+    later be pushed to mongo).
 
-    example object returned
+    example dict generated:
     {
         "query": "(biodiversity loss OR #biodiversityloss) -is:retweet -is:nullcast"
         "tag": "Biodiversity Loss"
@@ -242,7 +202,7 @@ class TwitterSearch:
 
 
     '''
-    Add the current time to the tweet.
+    Add the current time to tweet data.
     '''
     def addCurrentDateAndTimeToTweetData(self, document):
         currentDateAndTime = str(datetime.datetime.utcnow())
@@ -251,16 +211,17 @@ class TwitterSearch:
 
 
     '''
-	Saves the tweets in the mongo collection the class in MongoDb.
-	Takes in an array of objects (each object being a tweet), converts tweets into BSON format and inserts them 
-    into the collection.
+	Saves the tweets in the mongo collection.
 	'''
     def saveTweetsToMongoCollection(self, tweetsData):
+        self.mongoCollection.insert_many(tweetsData)
+
+        # optionally, for one-by-one storage:
         # for each tweet, format the tweet data into BSON (the format that Mongo) and insert the tweet into mongo
         """ for tweetData in tweetsData:
                 self.addCurrentDateAndTimeToTweetData(tweetData)
                 tweetDataBSON = bson.json_util.loads(json.dumps(tweetData))
                 self.mongoCollection.insert_one(tweetDataBSON) """
+        #however this approach is not recommended:
         #insert_one : approx 70s per page (1 page = 500 tweets)
         #insert_many : approx 1.6s per page !
-        self.mongoCollection.insert_many(tweetsData)

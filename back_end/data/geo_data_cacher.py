@@ -5,17 +5,25 @@ import json
 from datetime import datetime
 
 '''
-A class to fetch and cache tweets' geo data. 
+A class to fetch and cache tweets' geo data. The API calls to get geospatial data by place_id have a rate limit
+of 75 requests / 15 minute time window. When dealing with fairly large, datasets, this is a very strict limit which makes 
+fetching geo data potentially time consuming. 
+
+This class optimizes the process of fetching geo data: as geo data is being collected, it is cached in a mongo collection ("geo_data_caching_mongo_collection"). 
+For every place id whose data needs to be fetched using the Twitter API, a check is first made to see whether the relevant geospatial data
+has already been cached. If not, a request is made to fetch it using the Twitter API. This approach saves significant time
+because a large number of tweets are likely to share the same geospatial data.
+
+Further information about the API endpoint: https://developer.twitter.com/en/docs/twitter-api/v1/geo/place-information/api-reference/get-geo-id-place_id
 '''
 class GeoDataCacher:
     def __init__(self, bearer_token, geo_data_caching_mongo_collection, batch_size=75):
-        self.geo_data_caching_mongo_collection = geo_data_caching_mongo_collection
-        self.url = constants.TWEET_GEO_DATA_API_ENDPOINT
+        self.geo_data_caching_mongo_collection = geo_data_caching_mongo_collection #mongo collection where geospatial data is cached
         self.place_id_sleep_time = constants.GEO_DATA_BY_PLACE_ID_SLEEP_TIME
         self.coordinates_sleep_time = constants.GEO_DATA_BY_COORDINATES_SLEEP_TIME
         self.bearer_token = bearer_token
         self.batch_size = batch_size #e.g. 75 means that 75 geo data docs get inserted at a time to the caching collection
-        #self.tweets_with_coordinates = []
+        self.tweets_with_coordinates = []
 
 
 
@@ -26,7 +34,6 @@ class GeoDataCacher:
         }
         r = requests.get(query, headers=headers)
         return json.loads(r.text)
-
 
 
 
@@ -52,7 +59,7 @@ class GeoDataCacher:
 
 
     def getAndCachePlaceIdsGeoData(self, tweets_data_mongo_collection):
-        #get place ids that require geo_data
+        #get place ids that require geo_data from the mongo collection which stores the tweets
         places_ids_that_require_geo_data = self.getPlaceIdsThatRequireGeoData(tweets_data_mongo_collection)
         if (len(places_ids_that_require_geo_data) == 0):
             print("There are no tweets for which geo data needs to be fetched.")
@@ -98,7 +105,7 @@ class GeoDataCacher:
         tweets_place_ids = tweets_data_mongo_collection.distinct('geo.place_id')
         place_ids_whose_geo_data_was_never_cached = []
 
-        #for each place_id, if it is cached then its cached geo_data and attach it to the tweet in the tweets collection
+        #for each place_id, if it is cached then get its cached geo_data and attach it to the tweet in the tweets collection
         for place_id in tweets_place_ids:
             place_id_cached_geo_data = self.geo_data_caching_mongo_collection.find_one({"id": place_id}, {"_id": 0})
             if (place_id_cached_geo_data != None):

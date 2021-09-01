@@ -1,52 +1,14 @@
 import { ResponsiveChordCanvas } from '@nivo/chord'
-import { data } from '../../test_data/chord_test_data';
 
+/* NOTE: this visualization is not being used in the web application. It was left here on purpose because 
+it could be integrated in the future.  */
 const Chord = () => {
     return (
-        <div style={{"height": "100vh"}}>
+        <div style={{"height": "85vh"}}>
             <ResponsiveChordCanvas
-            matrix={data}
-            keys={[
-                'John',
-                'Raoul',
-                'Jane',
-                'Marcel',
-                'Ibrahim',
-                'Junko',
-                'Lyu',
-                'André',
-                'Maki',
-                'Véronique',
-                'Thibeau',
-                'Josiane',
-                'Raphaël',
-                'Mathéo',
-                'Margot',
-                'Hugo',
-                'Christian',
-                'Louis',
-                'Ella',
-                'Alton',
-                'Jimmy',
-                'Guillaume',
-                'Sébastien',
-                'Alfred',
-                'Bon',
-                'Solange',
-                'Kendrick',
-                'Jared',
-                'Satoko',
-                'Tomoko',
-                'Line',
-                'Delphine',
-                'Leonard',
-                'Alphonse',
-                'Lisa',
-                'Bart',
-                'Benjamin',
-                'Homer'
-            ]}
-            margin={{ top: 60, right: 200, bottom: 60, left: 60 }}
+            //matrix={/*data goes here*/} 
+            //keys={/*labels go here*/} 
+            margin={{ top: 120, right: 200, bottom: 120, left: 60 }}
             valueFormat=".2f"
             pixelRatio={2}
             padAngle={0.006}

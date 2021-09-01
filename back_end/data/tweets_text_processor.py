@@ -14,17 +14,11 @@ import spacy
 nlp = spacy.load("en_core_web_sm")
 
 from nltk.tokenize import TweetTokenizer
-from nltk import pos_tag, wordnet, bigrams
-from nltk.util import ngrams
+from nltk import pos_tag, wordnet
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
 
 from langdetect import detect 
-
-#from polyglot.detect import Detector
-#from spacy import displacy
-#from spacy_langdetect import LanguageDetector
-#from spacy.language import Language
 
 
 '''
@@ -123,6 +117,9 @@ class TweetsTextProcessor:
         word_cloud.to_file(filepath)
 
     
+    '''
+    Takes in text and plots wordcloud
+    '''
     def display_wordcloud_from_text(self, text, tag="", width=2400, height=1600, max_words=100, background_color="white"):
         stopwords = self.strings_to_ignore
         if (tag != "" and tag in TAGS_STOPWORDS.keys()):
@@ -170,7 +167,7 @@ class TweetsTextProcessor:
     Note: if this method is not called on a text where hashtags and mentions have already been removed, they will
           also be removed/replaced.
     '''
-    #to call after hashtags and mentions have been removed, otherwise they'll also be replaced
+    #NB: to call after hashtags and mentions have been removed, otherwise they'll also be replaced
     def remove_tag_related_terms(self, text, tag):
         new_text = text
         for term in TAGS_STOPWORDS[tag]:
@@ -229,19 +226,22 @@ class TweetsTextProcessor:
         "plants": 8,
         "pollution": 5
     }
+    if num_most_common is -1, all terms are returned with their frequency count
     '''
     def get_most_common_terms_from_text(self, text, num_most_common=50):
         preprocessed_text = self.preprocess_text(text)
         terms_counter = Counter()
         terms = [term for term in preprocessed_text if term not in self.strings_to_ignore and not (term.startswith((HASHTAG_SYMBOL, MENTION_SYMBOL)) or (len(term)<3))]  #no mentions, no hashtags
         terms_counter.update(terms)
-        most_common_terms_tuples = terms_counter.most_common(num_most_common)
+        most_common_terms_tuples = terms_counter.most_common(num_most_common) if (num_most_common != -1) else terms_counter.most_common()
         return get_dict_from_tuples_list(most_common_terms_tuples)
 
 
     
     '''
     Return type: dict 
+    NB: this method is correntlu performing poorly because sPacy's built-in NER algorithms have not been
+    trained on tweets' textual data.
     '''
     def extract_entities_frequencies_from_tweets(self, tweets):
         #get list of cleaned tweets
@@ -297,7 +297,7 @@ class TweetsTextProcessor:
         mentions_counter = Counter()
         mentions = self.get_mentions(text)
         mentions_counter.update(mentions)
-        most_common_mentioned_accounts_tuples = mentions_counter.most_common(num_most_common)
+        most_common_mentioned_accounts_tuples = mentions_counter.most_common(num_most_common) if (num_most_common != -1) else mentions_counter.most_common()
         return get_dict_from_tuples_list(most_common_mentioned_accounts_tuples)
 
     
@@ -308,7 +308,7 @@ class TweetsTextProcessor:
     '''
     def get_text_subjectivity_score(self, text, num_digits = 2):
         cleaned_text = self.clean_text(text)
-        if (len(cleaned_text) < 3):
+        if (len(cleaned_text) < 20):
             return -1
         subjectivity_score = TextBlob(cleaned_text).sentiment.subjectivity
         return round(subjectivity_score, num_digits)
@@ -335,6 +335,9 @@ class TweetsTextProcessor:
             return False #if there are errors trying to detect the language (e.g. the text is only a few characters long) return False
 
 
+    '''
+    Returns type: dict
+    '''
     def construct_hashtags_cooccurrences_dict(self, tweets):
         all_hashtags = []
         dict = {}

@@ -39,6 +39,45 @@ router.route('/num_tweets_by_tag_and_date/').get(async (req, res) => {
     }
   });
 
+  router.route('/daily_calendar_data_by_tags/').get(async (req, res) => {
+    try {
+      const tags = req.query.tags; 
+      var result = []
+      for (var i = 0; i < tags.length; i++) {
+        const tag = tags[i];
+        const tag_data = {
+          "tag": tag,
+          "start_date": "",
+          "end_date": "",
+          "data": []
+        }
+        const days = await DailyBatch.distinct("date");
+        const tag_num_tweets_field = "tags." + tag + ".num_tweets"
+        const start_date = days[0];
+        const end_date = days[days.length - 1];
+        for (var j = 0; j < days.length; j++) {
+            const num_tweets = await DailyBatch.findOne({"date": days[j]}, {[tag_num_tweets_field]: 1, "_id": 0});
+            const day_dict = {
+              "day": days[j],
+              "value": num_tweets["tags"][tag]["num_tweets"]
+          }
+          tag_data["data"].push(day_dict)
+        }
+        tag_data["start_date"] = start_date;
+        tag_data["end_date"] = end_date;
+        result.push(tag_data)
+      }
+      res.json(result)
+    } catch (err) {
+      console.log(err)
+      res.status(400).json({
+        errors: {
+          global: "An error occurred."
+        }
+      })
+    }
+  });
+
 
   router.route('/daily_calendar_data_by_tag/').get(async (req, res) => {
       try {

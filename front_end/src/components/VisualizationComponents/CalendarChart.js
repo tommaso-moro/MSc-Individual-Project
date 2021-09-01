@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'; 
 import { ResponsiveCalendar } from '@nivo/calendar'
-import api_calls from '../../api';
 
 
 const CalendarChart = (props) => {
@@ -8,52 +7,40 @@ const CalendarChart = (props) => {
     const from = {from: props.start_date}
     const to = {to: props.end_date}
     const [data, set_data] = useState([])
-    const [tag, set_tag] = useState(props.tag)
 
     useEffect(() => {
-        api_calls.daily_batch.get_daily_calendar_data_by_tag(props.tag)
-            .then(res => {
-                set_data(res.data)
-                console.log(res.data)
-            })
-            .catch(err => {
-                console.log(err)
-            })
+        set_data(props.data)
     }, [])
 
 
     return (
-        <>
-        {
-            data == [] && <p>Loading calendar</p>
-        }
-        {
-            data != [] && <ResponsiveCalendar
+            <ResponsiveCalendar
+            key={props.key}
+            width={props.width}
+            height={window.innerHeight}
             data={data}
             {...from}
             {...to}
             emptyColor="#eeeeee"
-            colors={[ '#61cdbb', '#97e3d5', '#e8c1a0', '#f47560' ]}
-            margin={{ top: 40, right: 40, bottom: 40, left: 40 }}
+            colors={[ '#d4fcf5', '#aef2e6', '#61cdbb', '#e8c1a0', '#f47560', '#c0392b', '#80150a']}
+            margin={{ top: 1, right: 1, bottom: 1, left: 1 }}
             yearSpacing={40}
             monthBorderColor="#ffffff"
-            dayBorderWidth={2}
+            dayBorderWidth={3}
             dayBorderColor="#ffffff"
             legends={[
                 {
                     anchor: 'top-left',
                     direction: 'row',
-                    translateY: 36,
-                    itemCount: 4,
+                    translateY: 90,
+                    itemCount: 6,
                     itemWidth: 42,
-                    itemHeight: 36,
-                    itemsSpacing: 14,
+                    itemHeight: 0,
+                    itemsSpacing: 15,
                     itemDirection: 'right-to-left'
                 }
             ]}
-            />
-        }
-        </>  
+        />
         
     )
 }

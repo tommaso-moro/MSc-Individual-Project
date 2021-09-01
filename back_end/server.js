@@ -32,14 +32,28 @@ const lineChartMonthlyDataRouter = require('./routes/line_chart_monthly_data')
 const geoSpatialDataRouter = require('./routes/geo_spatial_data.js')
 const tagsAndDatesRouter = require('./routes/tags_and_dates.js')
 const mostInfluentialTweetsRouter = require('./routes/most_influential_tweets.js')
+const subjectivityScoresDataRouter = require('./routes/subjectivity_scores.js')
+const wordCloudDataRouter = require('./routes/wordcloud.js')
+const mentionsAndHashtagsDataRouter = require('./routes/mentions_and_hashtags.js')
+const tagsPopularityDataRouter = require('./routes/tags_popularity.js')
 
-app.use('/monthly_batches', monthlyBatchesRouter);
-app.use('/daily_batches', dailyBatchesRouter);
-app.use('/line_chart_monthly_data', lineChartMonthlyDataRouter);
-app.use('/geo_spatial_data', geoSpatialDataRouter);
-app.use('/tags_and_dates', tagsAndDatesRouter);
-app.use('/most_influential_tweets', mostInfluentialTweetsRouter);
 
+
+app.use('/api/monthly_batches', monthlyBatchesRouter);
+app.use('/api/daily_batches', dailyBatchesRouter);
+app.use('/api/line_chart_monthly_data', lineChartMonthlyDataRouter);
+app.use('/api/geo_spatial_data', geoSpatialDataRouter);
+app.use('/api/tags_and_dates', tagsAndDatesRouter);
+app.use('/api/most_influential_tweets', mostInfluentialTweetsRouter);
+app.use('/api/subjectivity_scores', subjectivityScoresDataRouter);
+app.use('/api/wordcloud', wordCloudDataRouter);
+app.use('/api/mentions_and_hashtags', mentionsAndHashtagsDataRouter);
+app.use('/api/tags_popularity', tagsPopularityDataRouter);
+
+app.use(express.static('public'));
+app.get('*', (req,res) =>{    
+    res.sendFile(__dirname+'/public/index.html');
+});
 
 app.listen(port, () => {
     console.log('Server is running on port', port);

@@ -3,6 +3,15 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const geoSpatialDataSchema = new mongoose.Schema({
+    tag: {
+        type: String,
+        required: true
+    },
+    geo_data: {
+        type: Array, 
+        required: true,
+        unique: true
+    }
 
 })
 

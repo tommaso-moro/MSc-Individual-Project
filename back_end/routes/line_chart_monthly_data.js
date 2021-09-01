@@ -4,7 +4,10 @@ let LineChartMonthlyData = require('../models/line_chart_monthly_data.model');
 
 router.route('/').get((req, res) => {
     LineChartMonthlyData.find()
-        .then(data => res.json(data))
+        .then(data => {
+            data[0]["dates"].reverse()
+            res.json(data)
+        })
         .catch(err => res.status(400).json('Error: ' + err));
 });
 

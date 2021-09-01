@@ -38,4 +38,20 @@ router.route('/tags').get(async (req, res) => {
       }
   });
 
+  router.route('/start_and_end_dates_day').get(async (req, res) => {
+    try {
+        const doc = await TagsAndDates.find({}, {"_id": 0, "start_date_day": 1, "end_date_day": 1})
+        res.json(doc)
+      } catch (err) {
+        console.log(err)
+        res.status(400).json({
+          errors: {
+            global: "An error occurred."
+          }
+        })
+      }
+  });
+
+
+
 module.exports = router;

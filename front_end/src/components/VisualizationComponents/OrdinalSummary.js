@@ -1,42 +1,50 @@
-import OrdinalFrame from "semiotic/lib/OrdinalFrame"
-import testData from '../../test_data/subjectivity_scores.json'
-const colors = {
-  "Ex Machina": "#ac58e5",
-  "Far from the Madding Crowd": "#E0488B",
-  "The Longest Ride": "#9fd0cb",
-  "Green/Sustainable Energy": "#ac58e5"
-}
 
+import React from 'react';
 
+import OrdinalFrame from "semiotic/lib/OrdinalFrame";
 
-const frameProps = {   
-  data: testData["data"],
-  size: [700,400],
-  margin: { left: 160, bottom: 90, right: 10, top: 40 },
-  summaryType: "ridgeline", 
-  projection: "horizontal",
-  oAccessor: "group",
-  rAccessor: "price",
-  rExtent: [0],
-  style: d => {
-    return {
-      r: 2,
-      fill: d && colors[d.title]
-    }
-  },
-  summaryStyle: d => ({
-    fill: d && colors[d.title],
-    fillOpacity: 0.2,
-    stroke: d && colors[d.title],
-    strokeWidth: 0.5
-  }),
-  title: "Box Office Movies by Rank",
-  axes: [{ orient: "bottom", label: "price" }],
-  oLabel: true
-}
+const OrdinalSummary = (props) => {
+  const tags = props.tags
+  const colors = ['rgba(231, 76, 60,1.0)', 'rgba(41, 128, 185,1.0)', 'rgba(39, 174, 96,1.0)', 'rgba(241, 196, 15,1.0)', 'rgba(155, 89, 182,1.0)']
+  const tags_colors = {
 
-const OrdinalSummary = () => {
-  return <OrdinalFrame {...frameProps} />
+  }
+  for (var i = 0; i < tags.length; i++) {
+    tags_colors[tags[i]] = colors[i]
+  }
+  
+  const frameProps = {   
+    data: props.scores,
+    size: [(props.width*0.95),800],
+    margin: { left: 180, bottom: 90, right: 0, top: 40 },
+    //type: "point",
+    summaryType: "ridgeline", //can also use "ridgeline"
+    projection: "horizontal",
+    oAccessor: "tag",
+    rAccessor: "score",
+    rExtent: [0],
+    style: d => {
+      return {
+        r: 2,
+        fill: d && tags_colors[d.tag]
+      }
+    },
+    summaryStyle: d => ({
+      fill: d && tags_colors[d.tag],
+      fillOpacity: 0.2,
+      stroke: d && tags_colors[d.tag],
+      strokeWidth: 0.5
+    }),
+    title: "Subjectivity scores",
+    axes: [{ orient: "bottom", label: "subjectivity score" }],
+    oLabel: true
+  }
+
+  
+
+  return (
+    <OrdinalFrame {...frameProps} key={props.key}/>
+  )
 }
 
 export default OrdinalSummary;
